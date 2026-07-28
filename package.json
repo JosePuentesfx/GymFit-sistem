@@ -1,0 +1,8 @@
+{
+  "name": "novafit-desktop",
+  "version": "1.0.0",
+  "description": "Control local de gimnasio con roles y acceso biométrico",
+  "main": "main.js",
+  "scripts": { "start": "electron ." },
+  "devDependencies": { "electron": "^37.2.6" }
+}
