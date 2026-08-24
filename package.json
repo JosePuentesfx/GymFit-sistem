@@ -1,8 +1,21 @@
 {
-  "name": "novafit-desktop",
-  "version": "1.0.0",
-  "description": "Control local de gimnasio con roles y acceso biométrico",
+  "name": "novafit-pro",
+  "version": "2.0.0",
+  "description": "Sistema profesional de administración de gimnasio con almacenamiento local, roles, acceso biométrico y reportes.",
   "main": "main.js",
-  "scripts": { "start": "electron ." },
-  "devDependencies": { "electron": "^37.2.6" }
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --inspect",
+    "build": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^37.2.6"
+  },
+  "build": {
+    "appId": "com.novafit.pro",
+    "productName": "NovaFit Pro",
+    "directories": { "output": "dist" },
+    "win": { "target": "nsis", "icon": "assets/icon.ico" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
 }

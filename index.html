@@ -1,13 +1,690 @@
-<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>NovaFit Desktop</title><link rel="stylesheet" href="styles.css"></head><body>
-<div id="loginView" class="login-page"><section class="login-card"><div class="brand"><span class="brand-mark">N</span> NOVAFIT</div><p class="eyebrow">SISTEMA DE GIMNASIO</p><h1>Bienvenido de vuelta</h1><p>Ingresa con tu cuenta para administrar el gimnasio.</p><form id="loginForm"><label>Usuario<input name="username" required value="admin"></label><label>Contraseña<input name="password" required type="password" value="admin123"></label><button class="primary-button">Iniciar sesión →</button></form><small id="loginError"></small></section><aside class="login-aside"><p>CONTROL CENTRALIZADO</p><h2>Tu gimnasio,<br><em>siempre en orden.</em></h2><div class="feature">◉ Pagos y miembros en un solo lugar</div><div class="feature">⌁ Acceso condicionado a membresía vigente</div></aside></div>
-<div id="appView" hidden class="app-shell"><aside class="sidebar"><a class="brand" href="#"><span class="brand-mark">N</span> NOVAFIT</a><div class="gym-label"><span class="live-dot"></span> GYM ADMIN</div><nav><button class="nav-link active" data-view="overview">▦ Resumen</button><button class="nav-link" data-view="members">♙ Socios</button><button class="nav-link" data-view="payments">◈ Pagos</button><button class="nav-link owner-only" data-view="staff">♜ Equipo</button><button class="nav-link" data-view="access">⌁ Acceso</button></nav><div class="sidebar-bottom"><div class="mini-card"><span class="mini-icon">✦</span><div><strong>Control activo</strong><small>Base de datos local</small></div></div><button class="settings-button" id="logout">↪ Cerrar sesión</button><div class="user"><div class="avatar coral" id="userAvatar"></div><div><strong id="userName"></strong><small id="userRole"></small></div></div></div></aside>
-<main><header class="topbar"><div><p class="eyebrow" id="today"></p><h1 id="pageTitle">Resumen general</h1></div><button class="primary-button" id="mainAction">＋ Registrar pago</button></header>
-<section id="overview" class="view"><div class="stats-grid"><article class="stat-card blue"><span>Ingresos del mes</span><strong id="incomeStat">$0</strong><small>pagos registrados este mes</small></article><article class="stat-card"><span>Socios activos</span><strong id="activeStat">0</strong><small>con mensualidad vigente</small></article><article class="stat-card"><span>Por vencer</span><strong id="dueStat">0</strong><small>en los siguientes 7 días</small></article><article class="stat-card dark"><span>Accesos hoy</span><strong id="accessStat">0</strong><small>intentos registrados</small></article></div><section class="content-card"><div class="card-header"><div><h2>Pagos recientes</h2><p>Últimos movimientos registrados</p></div></div><div id="recentPayments"></div></section></section>
-<section id="members" class="view" hidden><div class="section-heading"><div><p class="eyebrow">DIRECTORIO</p><h2>Socios del gimnasio</h2></div><button class="primary-button" data-modal="memberModal">＋ Nuevo socio</button></div><div class="content-card"><div class="table-tools"><label class="search">⌕ <input id="memberSearch" placeholder="Buscar socio..."></label><span id="memberCount"></span></div><div class="table-wrap"><table><thead><tr><th>SOCIO</th><th>CONTACTO</th><th>HUELLA / ID</th><th>ESTADO</th></tr></thead><tbody id="membersTable"></tbody></table></div></div></section>
-<section id="payments" class="view" hidden><div class="section-heading"><div><p class="eyebrow">COBRANZA</p><h2>Pagos y mensualidades</h2></div><button class="primary-button" data-modal="paymentModal">＋ Registrar pago</button></div><div class="content-card"><div class="table-wrap"><table><thead><tr><th>SOCIO</th><th>PLAN</th><th>MONTO</th><th>VENCE</th><th>ESTADO</th></tr></thead><tbody id="paymentsTable"></tbody></table></div></div></section>
-<section id="staff" class="view" hidden><div class="section-heading"><div><p class="eyebrow">ADMINISTRACIÓN</p><h2>Recepcionistas</h2></div><button class="primary-button" data-modal="staffModal">＋ Dar de alta</button></div><div class="content-card"><div class="table-wrap"><table><thead><tr><th>USUARIO</th><th>NOMBRE</th><th>ROL</th><th>ESTADO</th></tr></thead><tbody id="staffTable"></tbody></table></div></div></section>
-<section id="access" class="view" hidden><div class="section-heading"><div><p class="eyebrow">TORNIQUETE</p><h2>Validación de acceso</h2></div></div><div class="access-panel"><div><span class="access-icon">⌁</span><h2>Simular lectura de huella</h2><p>Conecta aquí el identificador que entregue tu lector biométrico.</p><form id="accessForm"><input required name="biometricId" placeholder="Ej. BIO-0001"><button class="primary-button">Validar acceso</button></form></div><div id="accessResult" class="access-result">Esperando lectura del lector...</div></div><section class="content-card"><h2>Últimos accesos</h2><div id="accessLog"></div></section></section>
-</main></div>
-<div class="modal-backdrop" id="memberModal"><form class="modal member-form"><button type="button" class="modal-close">×</button><p class="eyebrow">NUEVO SOCIO</p><h2>Dar de alta miembro</h2><label>Nombre completo<input name="name" required></label><div class="form-row"><label>Teléfono<input name="phone" required></label><label>Correo<input name="email" type="email"></label></div><label>ID del lector de huella<input name="biometricId" placeholder="Ej. BIO-0001"><small>El lector debe entregar este ID; no guardamos huellas.</small></label><button class="primary-button submit">Guardar socio →</button></form></div>
-<div class="modal-backdrop" id="paymentModal"><form class="modal payment-form"><button type="button" class="modal-close">×</button><p class="eyebrow">NUEVO MOVIMIENTO</p><h2>Registrar mensualidad</h2><label>Socio<select name="memberId" id="paymentMember" required></select></label><div class="form-row"><label>Plan<select name="plan"><option>Mensual</option><option>Trimestral</option><option>Estudiante</option><option>Premium</option></select></label><label>Monto<input name="amount" type="number" required min="1" value="550"></label></div><div class="form-row"><label>Fecha de pago<input name="paymentDate" type="date" required></label><label>Vence el<input name="dueDate" type="date" required></label></div><button class="primary-button submit">Guardar pago →</button></form></div>
-<div class="modal-backdrop" id="staffModal"><form class="modal staff-form"><button type="button" class="modal-close">×</button><p class="eyebrow">NUEVO COLABORADOR</p><h2>Dar de alta recepcionista</h2><label>Nombre completo<input name="name" required></label><label>Usuario<input name="username" required></label><label>Contraseña temporal<input name="password" type="password" required minlength="6"></label><button class="primary-button submit">Crear recepcionista →</button></form></div><div id="toast" class="toast"></div><script src="app.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NovaFit Pro — Sistema de Gimnasio</title>
+  <meta name="description" content="Sistema profesional de administración de gimnasio con control de socios, pagos, acceso biométrico y reportes.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ═══════════════════ LOGIN ═════════════════════════════════════════════ -->
+<div id="loginView" class="login-page">
+  <div class="login-bg">
+    <div class="login-orb orb1"></div>
+    <div class="login-orb orb2"></div>
+    <div class="login-orb orb3"></div>
+  </div>
+  <section class="login-card glass">
+    <div class="login-logo">
+      <span class="brand-icon">N</span>
+      <span class="brand-text">NOVAFIT <em>PRO</em></span>
+    </div>
+    <p class="login-sub">Sistema Profesional de Gimnasio</p>
+    <h1 class="login-title">Bienvenido de vuelta</h1>
+    <form id="loginForm" autocomplete="off">
+      <div class="field-group">
+        <label for="loginUser">Usuario</label>
+        <div class="input-icon-wrap">
+          <span class="input-icon">⊙</span>
+          <input id="loginUser" name="username" required placeholder="Ingresa tu usuario" autocomplete="username">
+        </div>
+      </div>
+      <div class="field-group">
+        <label for="loginPass">Contraseña</label>
+        <div class="input-icon-wrap">
+          <span class="input-icon">◈</span>
+          <input id="loginPass" name="password" required type="password" placeholder="••••••••" autocomplete="current-password">
+          <button type="button" class="pass-toggle" id="passToggle" tabindex="-1">👁</button>
+        </div>
+      </div>
+      <button class="btn-primary full-width" id="loginBtn" type="submit">
+        <span>Iniciar sesión</span>
+        <span class="btn-arrow">→</span>
+      </button>
+      <small id="loginError" class="error-msg"></small>
+    </form>
+    <p class="login-hint">Credenciales por defecto: <code>admin</code> / <code>admin123</code></p>
+  </section>
+</div>
+
+<!-- ═══════════════════ APP SHELL ════════════════════════════════════════ -->
+<div id="appView" hidden class="app-shell">
+
+  <!-- Custom title bar -->
+  <div class="titlebar">
+    <div class="titlebar-drag"></div>
+    <div class="titlebar-controls">
+      <button class="tc-btn tc-min" id="tcMin" title="Minimizar">─</button>
+      <button class="tc-btn tc-max" id="tcMax" title="Maximizar">□</button>
+      <button class="tc-btn tc-close" id="tcClose" title="Cerrar">✕</button>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a class="brand" href="#">
+        <span class="brand-icon">N</span>
+        <span class="brand-name" id="gymNameLabel">NOVAFIT</span>
+      </a>
+    </div>
+
+    <div class="gym-badge">
+      <span class="live-dot"></span>
+      <span id="gymBadgeLabel">GYM ACTIVO</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-view="overview">
+        <span class="nav-icon">◧</span>
+        <span class="nav-label">Dashboard</span>
+      </button>
+      <button class="nav-item" data-view="members">
+        <span class="nav-icon">♙</span>
+        <span class="nav-label">Socios</span>
+        <span class="nav-badge" id="membersBadge" hidden></span>
+      </button>
+      <button class="nav-item" data-view="payments">
+        <span class="nav-icon">◈</span>
+        <span class="nav-label">Pagos</span>
+      </button>
+      <button class="nav-item" data-view="access">
+        <span class="nav-icon">⌁</span>
+        <span class="nav-label">Acceso</span>
+      </button>
+      <button class="nav-item owner-only" data-view="staff">
+        <span class="nav-icon">♜</span>
+        <span class="nav-label">Equipo</span>
+      </button>
+      <button class="nav-item owner-only" data-view="settings">
+        <span class="nav-icon">⚙</span>
+        <span class="nav-label">Configuración</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-chip" id="userChip">
+        <div class="user-avatar" id="userAvatar"></div>
+        <div class="user-info">
+          <strong id="userName"></strong>
+          <small id="userRole"></small>
+        </div>
+      </div>
+      <button class="btn-logout" id="logout">↪ Salir</button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main-content" id="mainContent">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <p class="topbar-date" id="today"></p>
+        <h1 class="topbar-title" id="pageTitle">Dashboard</h1>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn-ghost" id="themeToggleBtn" title="Cambiar tema claro/oscuro">🌙 Tema</button>
+        <button class="btn-ghost" id="terminalToggleBtn" title="Abrir terminal de acceso">📱 Terminal de acceso</button>
+        <button class="btn-primary" id="mainAction">＋ Registrar pago</button>
+      </div>
+    </header>
+
+    <!-- ─── OVERVIEW ─── -->
+    <section id="overview" class="view active">
+      <div class="kpi-grid">
+        <article class="kpi-card kpi-blue">
+          <div class="kpi-icon">◈</div>
+          <div class="kpi-body">
+            <span class="kpi-label">Ingresos del mes</span>
+            <strong class="kpi-value" id="kpiIncome">$0</strong>
+            <small class="kpi-sub" id="kpiIncomeCount">0 pagos registrados</small>
+          </div>
+        </article>
+        <article class="kpi-card kpi-green">
+          <div class="kpi-icon">♙</div>
+          <div class="kpi-body">
+            <span class="kpi-label">Socios activos</span>
+            <strong class="kpi-value" id="kpiActive">0</strong>
+            <small class="kpi-sub">con membresía vigente</small>
+          </div>
+        </article>
+        <article class="kpi-card kpi-amber">
+          <div class="kpi-icon">⏳</div>
+          <div class="kpi-body">
+            <span class="kpi-label">Por vencer</span>
+            <strong class="kpi-value" id="kpiDue">0</strong>
+            <small class="kpi-sub">en los próximos 7 días</small>
+          </div>
+        </article>
+        <article class="kpi-card kpi-purple">
+          <div class="kpi-icon">⌁</div>
+          <div class="kpi-body">
+            <span class="kpi-label">Accesos hoy</span>
+            <strong class="kpi-value" id="kpiAccess">0</strong>
+            <small class="kpi-sub">entradas registradas</small>
+          </div>
+        </article>
+      </div>
+
+      <!-- Chart + alerts row -->
+      <div class="dash-row">
+        <div class="card chart-card">
+          <div class="card-head">
+            <div>
+              <h2>Ingresos mensuales</h2>
+              <p class="card-sub">Últimos 6 meses</p>
+            </div>
+          </div>
+          <canvas id="incomeChart" height="200"></canvas>
+        </div>
+        <div class="card alerts-card">
+          <div class="card-head">
+            <div>
+              <h2>⚠ Por vencer</h2>
+              <p class="card-sub">Membresías próximas a expirar</p>
+            </div>
+          </div>
+          <div id="dueSoonList" class="due-list"></div>
+        </div>
+      </div>
+
+      <!-- Recent payments -->
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Pagos recientes</h2>
+            <p class="card-sub">Últimos movimientos del gimnasio</p>
+          </div>
+          <button class="btn-ghost" id="goPayments">Ver todos →</button>
+        </div>
+        <div id="recentPaymentsTable"></div>
+      </div>
+    </section>
+
+    <!-- ─── MEMBERS ─── -->
+    <section id="members" class="view" hidden>
+      <div class="card">
+        <div class="card-head">
+          <div class="search-wrap">
+            <span class="search-icon">⌕</span>
+            <input id="memberSearch" class="search-input" placeholder="Buscar por nombre, teléfono o huella...">
+          </div>
+          <div class="flex-gap">
+            <select id="memberFilter" class="select-control">
+              <option value="all">Todos los socios</option>
+              <option value="vigente">Vigentes</option>
+              <option value="por-vencer">Por vencer</option>
+              <option value="vencido">Vencidos</option>
+            </select>
+            <button class="btn-ghost" id="exportMembersBtn">↓ Exportar CSV</button>
+            <button class="btn-primary" id="addMemberBtn" data-action="open-member-new">＋ Nuevo socio</button>
+          </div>
+        </div>
+        <div class="table-info">
+          <span id="memberCount">0 socios</span>
+        </div>
+        <div class="table-wrap">
+          <table id="membersTableEl">
+            <thead>
+              <tr>
+                <th>SOCIO</th>
+                <th>CONTACTO</th>
+                <th>HUELLA / ID</th>
+                <th>ÚLTIMO PAGO</th>
+                <th>ESTADO</th>
+                <th>ACCIONES</th>
+              </tr>
+            </thead>
+            <tbody id="membersTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── PAYMENTS ─── -->
+    <section id="payments" class="view" hidden>
+      <div class="card">
+        <div class="card-head">
+          <div class="search-wrap">
+            <span class="search-icon">⌕</span>
+            <input id="paymentSearch" class="search-input" placeholder="Buscar por socio o plan...">
+          </div>
+          <div class="flex-gap">
+            <select id="paymentMonthFilter" class="select-control"></select>
+            <button class="btn-ghost" id="exportPaymentsBtn">↓ Exportar CSV</button>
+            <button class="btn-primary" id="addPaymentBtn" data-action="open-payment-new">＋ Registrar pago</button>
+          </div>
+        </div>
+        <div class="table-info">
+          <span id="paymentsCount">0 pagos</span>
+          <span class="table-info-right" id="paymentsTotal"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>SOCIO</th>
+                <th>PLAN</th>
+                <th>MÉTODO</th>
+                <th>MONTO</th>
+                <th>FECHA PAGO</th>
+                <th>VENCE</th>
+                <th>ESTADO</th>
+                <th>ACCIONES</th>
+              </tr>
+            </thead>
+            <tbody id="paymentsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── ACCESS ─── -->
+    <section id="access" class="view" hidden>
+      <!-- Access terminal -->
+      <div class="access-terminal">
+        <div class="access-terminal-left">
+          <div class="terminal-icon">⌁</div>
+          <h2>Control de Acceso</h2>
+          <p>Ingresa el ID biométrico para validar la membresía del socio.</p>
+          <form id="accessForm" class="access-form">
+            <div class="access-input-wrap">
+              <input id="accessInput" name="biometricId" required placeholder="Ej. BIO-0001" class="access-input">
+              <button type="submit" class="btn-primary">Validar →</button>
+            </div>
+          </form>
+        </div>
+        <div id="accessResult" class="access-result idle">
+          <div class="access-result-inner">
+            <div class="access-status-icon">⌁</div>
+            <strong>Esperando lectura...</strong>
+            <span>Ingresa un ID biométrico para continuar</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Access log -->
+      <div class="card" style="margin-top:24px">
+        <div class="card-head">
+          <div>
+            <h2>Registro de accesos</h2>
+            <p class="card-sub">Historial completo de entradas al gimnasio</p>
+          </div>
+          <div class="flex-gap">
+            <button class="btn-ghost" id="exportAccessBtn">↓ Exportar CSV</button>
+            <button class="btn-danger-ghost" id="clearAccessBtn">🗑 Limpiar log</button>
+          </div>
+        </div>
+        <div id="accessLog" class="access-log-list"></div>
+      </div>
+    </section>
+
+    <!-- ─── STAFF ─── -->
+    <section id="staff" class="view" hidden>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Equipo del gimnasio</h2>
+            <p class="card-sub">Usuarios con acceso al sistema</p>
+          </div>
+          <button class="btn-primary" data-modal="staffModal">＋ Agregar recepcionista</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>USUARIO</th>
+                <th>NOMBRE COMPLETO</th>
+                <th>ROL</th>
+                <th>REGISTRO</th>
+                <th>ESTADO</th>
+                <th>ACCIONES</th>
+              </tr>
+            </thead>
+            <tbody id="staffTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── SETTINGS ─── -->
+    <section id="settings" class="view" hidden>
+      <div class="settings-grid">
+
+        <!-- Gym info -->
+        <div class="card">
+          <div class="card-head"><h2>🏋 Información del gimnasio</h2></div>
+          <form id="gymForm" class="settings-form">
+            <div class="form-row">
+              <div class="field-group">
+                <label>Nombre del gimnasio</label>
+                <input name="name" id="gymName" required placeholder="NovaFit">
+              </div>
+              <div class="field-group">
+                <label>Propietario</label>
+                <input name="owner" id="gymOwner" placeholder="Nombre del dueño">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field-group">
+                <label>Teléfono</label>
+                <input name="phone" id="gymPhone" placeholder="+52 000 000 0000">
+              </div>
+              <div class="field-group">
+                <label>Correo</label>
+                <input name="email" id="gymEmail" type="email" placeholder="contacto@gym.com">
+              </div>
+            </div>
+            <div class="field-group">
+              <label>Dirección</label>
+              <input name="address" id="gymAddress" placeholder="Calle, número, ciudad">
+            </div>
+            <div class="form-row">
+              <div class="field-group">
+                <label>Moneda</label>
+                <select name="currency" id="gymCurrency">
+                  <option value="MXN">MXN — Peso mexicano</option>
+                  <option value="USD">USD — Dólar americano</option>
+                  <option value="EUR">EUR — Euro</option>
+                  <option value="COP">COP — Peso colombiano</option>
+                  <option value="ARS">ARS — Peso argentino</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" class="btn-primary">Guardar cambios</button>
+          </form>
+        </div>
+
+        <!-- Plans -->
+        <div class="card">
+          <div class="card-head">
+            <h2>📋 Planes de membresía</h2>
+            <button class="btn-ghost" id="addPlanBtn">＋ Agregar plan</button>
+          </div>
+          <div id="plansList" class="plans-list"></div>
+          <button class="btn-primary" id="savePlansBtn" style="margin-top:16px">Guardar planes</button>
+        </div>
+
+        <!-- Appearance & Accessibility -->
+        <div class="card">
+          <div class="card-head"><h2>🎨 Apariencia y Accesibilidad</h2></div>
+          <div class="settings-form">
+            <div class="form-row">
+              <div class="field-group">
+                <label>Tema del sistema</label>
+                <select id="themeSelect" class="select-control">
+                  <option value="dark">🌙 Modo Oscuro (Predeterminado)</option>
+                  <option value="light">☀️ Modo Claro (Blanco)</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label>Tamaño de la letra (Fuente)</label>
+                <select id="fontSizeSelect" class="select-control">
+                  <option value="13px">Pequeña (13px)</option>
+                  <option value="14px" selected>Normal (14px)</option>
+                  <option value="16px">Grande (16px)</option>
+                  <option value="18px">Muy Grande (18px)</option>
+                </select>
+              </div>
+            </div>
+            <small style="color:var(--text3);display:block">El tema y tamaño de letra se aplican instantáneamente en todo el sistema.</small>
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div class="card">
+          <div class="card-head"><h2>🔐 Cambiar contraseña</h2></div>
+          <form id="passwordForm" class="settings-form">
+            <div class="field-group">
+              <label>Contraseña actual</label>
+              <input name="currentPassword" type="password" required placeholder="••••••••">
+            </div>
+            <div class="field-group">
+              <label>Nueva contraseña</label>
+              <input name="newPassword" type="password" required minlength="6" placeholder="••••••••">
+            </div>
+            <div class="field-group">
+              <label>Confirmar nueva contraseña</label>
+              <input name="confirmPassword" type="password" required placeholder="••••••••">
+            </div>
+            <button type="submit" class="btn-primary">Actualizar contraseña</button>
+          </form>
+        </div>
+
+        <!-- Data management -->
+        <div class="card">
+          <div class="card-head"><h2>💾 Respaldo de datos</h2></div>
+          <div class="data-actions">
+            <div class="data-action-item">
+              <div>
+                <strong>Exportar backup completo</strong>
+                <p>Guarda una copia completa de la base de datos en formato JSON.</p>
+              </div>
+              <button class="btn-ghost" id="backupBtn">↓ Backup</button>
+            </div>
+            <div class="data-action-item">
+              <div>
+                <strong>Restaurar desde backup</strong>
+                <p>Reemplaza todos los datos con un archivo de backup previo.</p>
+              </div>
+              <button class="btn-danger-ghost" id="restoreBtn">↑ Restaurar</button>
+            </div>
+          </div>
+          <p class="data-path-info" id="dataPathInfo"></p>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ═══════════════════ MODALS ════════════════════════════════════════════ -->
+
+<!-- Member modal -->
+<div class="modal-backdrop" id="memberModal">
+  <div class="modal">
+    <button type="button" class="modal-close">✕</button>
+    <p class="modal-tag" id="memberModalTag">NUEVO SOCIO</p>
+    <h2 id="memberModalTitle">Registrar socio</h2>
+    <form id="memberForm">
+      <input type="hidden" name="memberId" id="memberFormId">
+      <div class="form-row">
+        <div class="field-group">
+          <label>Nombre completo *</label>
+          <input name="name" id="memberFormName" required placeholder="Nombre Apellido">
+        </div>
+        <div class="field-group">
+          <label>Teléfono *</label>
+          <input name="phone" id="memberFormPhone" required placeholder="+52 000 000 0000">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field-group">
+          <label>Correo electrónico</label>
+          <input name="email" id="memberFormEmail" type="email" placeholder="correo@ejemplo.com">
+        </div>
+        <div class="field-group">
+          <label>Fecha de nacimiento</label>
+          <input name="birthdate" id="memberFormBirthdate" type="date">
+        </div>
+      </div>
+      <div class="field-group">
+        <label>ID biométrico / Huella dactilar / Clave de acceso</label>
+        <div class="bio-input-wrap">
+          <input name="biometricId" id="memberFormBio" placeholder="Pasa la huella o ingresa PIN (Ej. 4829)" autocomplete="off">
+          <button type="button" class="btn-ghost" id="genPinBtn" title="Generar clave aleatoria de 4 dígitos si no cuenta con lector">🎲 Generar PIN 4 dígitos</button>
+        </div>
+        <div id="bioScannerStatus" class="bio-scanner-status idle">
+          <span class="scanner-dot"></span>
+          <span class="scanner-text">Haz clic en la casilla para activar lectura biométrica</span>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Contacto de emergencia</label>
+        <input name="emergencyContact" id="memberFormEmergency" placeholder="Nombre y teléfono">
+      </div>
+      <div class="field-group">
+        <label>Notas internas</label>
+        <input name="notes" id="memberFormNotes" placeholder="Condición médica, observaciones...">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-ghost modal-close-btn">Cancelar</button>
+        <button class="btn-primary" id="memberFormSubmit">Guardar socio →</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Payment modal -->
+<div class="modal-backdrop" id="paymentModal">
+  <div class="modal">
+    <button type="button" class="modal-close">✕</button>
+    <p class="modal-tag">NUEVO MOVIMIENTO</p>
+    <h2>Registrar mensualidad</h2>
+    <form id="paymentForm">
+      <div class="field-group">
+        <label>Socio *</label>
+        <select name="memberId" id="paymentMember" required>
+          <option value="">— Selecciona un socio —</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="field-group">
+          <label>Plan de membresía *</label>
+          <select name="plan" id="paymentPlan" required></select>
+        </div>
+        <div class="field-group">
+          <label>Monto *</label>
+          <div class="input-prefix-wrap">
+            <span class="input-prefix" id="currencyPrefix">$</span>
+            <input name="amount" id="paymentAmount" type="number" required min="1" step="0.01">
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field-group">
+          <label>Método de pago</label>
+          <select name="method" id="paymentMethod">
+            <option>Efectivo</option>
+            <option>Tarjeta débito</option>
+            <option>Tarjeta crédito</option>
+            <option>Transferencia</option>
+            <option>Otro</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Fecha de pago *</label>
+          <input name="paymentDate" id="paymentDate" type="date" required>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Fecha de vencimiento *</label>
+        <input name="dueDate" id="paymentDueDate" type="date" required>
+      </div>
+      <div class="field-group">
+        <label>Notas</label>
+        <input name="notes" placeholder="Observaciones opcionales...">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-ghost modal-close-btn">Cancelar</button>
+        <button class="btn-primary">Guardar pago →</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Staff modal -->
+<div class="modal-backdrop" id="staffModal">
+  <div class="modal">
+    <button type="button" class="modal-close">✕</button>
+    <p class="modal-tag">NUEVO COLABORADOR</p>
+    <h2>Agregar recepcionista</h2>
+    <form id="staffForm">
+      <div class="field-group">
+        <label>Nombre completo *</label>
+        <input name="name" required placeholder="Nombre Apellido">
+      </div>
+      <div class="form-row">
+        <div class="field-group">
+          <label>Usuario *</label>
+          <input name="username" required placeholder="usuario123">
+        </div>
+        <div class="field-group">
+          <label>Contraseña temporal *</label>
+          <input name="password" type="password" required minlength="6" placeholder="Mínimo 6 caracteres">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-ghost modal-close-btn">Cancelar</button>
+        <button class="btn-primary">Crear recepcionista →</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Member detail modal -->
+<div class="modal-backdrop" id="memberDetailModal">
+  <div class="modal modal-wide">
+    <button type="button" class="modal-close">✕</button>
+    <div id="memberDetailContent"></div>
+  </div>
+</div>
+
+<!-- Reset password modal -->
+<div class="modal-backdrop" id="resetPasswordModal">
+  <div class="modal">
+    <button type="button" class="modal-close">✕</button>
+    <p class="modal-tag">SEGURIDAD</p>
+    <h2>Resetear contraseña</h2>
+    <form id="resetPasswordForm">
+      <input type="hidden" name="userId" id="resetUserId">
+      <div class="field-group">
+        <label>Nueva contraseña *</label>
+        <input name="newPassword" type="password" required minlength="6" placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-ghost modal-close-btn">Cancelar</button>
+        <button class="btn-primary">Resetear →</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Confirm modal -->
+<div class="modal-backdrop" id="confirmModal">
+  <div class="modal modal-sm">
+    <p class="modal-tag">CONFIRMACIÓN</p>
+    <h2 id="confirmTitle">¿Estás seguro?</h2>
+    <p id="confirmMessage" class="confirm-msg"></p>
+    <div class="modal-footer">
+      <button type="button" class="btn-ghost" id="confirmCancel">Cancelar</button>
+      <button type="button" class="btn-danger" id="confirmOk">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Recibo modal -->
+<div class="modal-backdrop" id="receiptModal">
+  <div class="modal modal-wide">
+    <button type="button" class="modal-close">✕</button>
+    <div id="receiptContent"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn-ghost modal-close-btn">Cerrar</button>
+      <button type="button" class="btn-primary" onclick="window.print()">🖨 Imprimir recibo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NovaFit — Terminal de Acceso</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    /* ── Design tokens ── */
+    :root {
+      --bg:        #0d1117;
+      --bg2:       #161b22;
+      --bg3:       #1c2230;
+      --border:    rgba(255,255,255,.09);
+      --text:      #e6eaf2;
+      --text2:     #8b95a8;
+      --text3:     #5c6680;
+      --blue:      #4f8ef7;
+      --blue-glow: rgba(79,142,247,.25);
+      --green:     #22c55e;
+      --red:       #ef4444;
+      --amber:     #f59e0b;
+    }
+    html[data-theme="light"] {
+      --bg:        #f0f4ff;
+      --bg2:       #ffffff;
+      --bg3:       #e8eef8;
+      --border:    rgba(0,0,0,.1);
+      --text:      #111827;
+      --text2:     #4b5563;
+      --text3:     #9ca3af;
+    }
+
+    *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+
+    /* ── Titlebar ── */
+    .titlebar {
+      height: 36px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      -webkit-app-region: drag;
+      flex-shrink: 0;
+    }
+    .titlebar-title {
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      color: var(--text3);
+      text-transform: uppercase;
+    }
+    .tb-controls { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+    .tb-btn {
+      width: 36px; height: 32px;
+      border: none; background: transparent;
+      color: var(--text3); font-size: .8rem;
+      cursor: pointer; transition: all .15s;
+      border-radius: 6px;
+    }
+    .tb-btn:hover { background: var(--bg3); color: var(--text); }
+    .tb-close:hover { background: var(--red); color: white; }
+
+    /* ── Main layout (Centered Container for Fullscreen) ── */
+    .terminal-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .terminal-card {
+      width: 100%;
+      max-width: 520px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    /* ── Header ── */
+    .gym-header {
+      text-align: center;
+      width: 100%;
+    }
+    .gym-logo {
+      width: 64px; height: 64px;
+      background: linear-gradient(135deg, #4f8ef7, #6366f1);
+      border-radius: 16px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2rem; font-weight: 900; font-style: italic;
+      color: white; margin: 0 auto 12px;
+      box-shadow: 0 8px 24px rgba(79,142,247,.35);
+    }
+    .gym-name {
+      font-size: 1.6rem;
+      font-weight: 900;
+      letter-spacing: .08em;
+      color: var(--text);
+    }
+    .gym-subtitle {
+      font-size: .8rem;
+      font-weight: 600;
+      letter-spacing: .14em;
+      color: var(--text3);
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    /* ── Status display (Giant for Fullscreen) ── */
+    .status-display {
+      width: 100%;
+      border-radius: 20px;
+      padding: 32px 24px;
+      text-align: center;
+      border: 2px solid var(--border);
+      background: var(--bg2);
+      transition: all .4s ease;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    .status-display.idle {
+      border-color: var(--border);
+    }
+    .status-display.scanning {
+      border-color: rgba(79,142,247,.5);
+      background: rgba(79,142,247,.06);
+      animation: scanPulse 1.2s ease-in-out infinite;
+    }
+    .status-display.granted {
+      border-color: rgba(34,197,94,.6);
+      background: rgba(34,197,94,.1);
+      box-shadow: 0 0 50px rgba(34,197,94,.2);
+      animation: grantBounce .5s ease;
+    }
+    .status-display.denied {
+      border-color: rgba(239,68,68,.6);
+      background: rgba(239,68,68,.1);
+      box-shadow: 0 0 50px rgba(239,68,68,.2);
+      animation: denyShake .4s ease;
+    }
+
+    @keyframes scanPulse { 0%,100% { opacity:1; } 50% { opacity:.6; } }
+    @keyframes grantBounce { 0%,100% { transform:scale(1); } 50% { transform:scale(1.04); } }
+    @keyframes denyShake { 0%,100% { transform:translateX(0); } 25% { transform:translateX(-10px); } 75% { transform:translateX(10px); } }
+
+    .status-icon {
+      font-size: 3.8rem;
+      line-height: 1;
+      transition: all .3s;
+    }
+    .status-name {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -.01em;
+    }
+    .status-detail {
+      font-size: .9rem;
+      color: var(--text2);
+    }
+    .status-display.granted .status-name { color: var(--green); }
+    .status-display.denied  .status-name { color: var(--red); }
+    .status-display.scanning .status-name { color: var(--blue); }
+
+    /* ── Input area ── */
+    .input-area {
+      width: 100%;
+    }
+    .input-label {
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: 10px;
+      display: block;
+      text-align: center;
+    }
+    .pin-row {
+      display: flex;
+      gap: 10px;
+    }
+    .pin-input {
+      flex: 1;
+      height: 56px;
+      background: var(--bg2);
+      color: var(--text);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 0 18px;
+      font-family: 'Inter', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: .2em;
+      text-align: center;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .pin-input:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 4px rgba(79,142,247,.25);
+    }
+    .pin-input.has-value {
+      border-color: rgba(79,142,247,.5);
+      color: var(--blue);
+    }
+    .btn-validate {
+      height: 56px;
+      padding: 0 24px;
+      background: var(--blue);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: .95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .2s;
+      white-space: nowrap;
+    }
+    .btn-validate:hover { background: #3b80f5; transform: translateY(-1px); }
+    .btn-validate:active { transform: translateY(0); }
+
+    /* Numeric keypad */
+    .keypad {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .key {
+      height: 54px;
+      background: var(--bg2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .key:hover { background: var(--bg3); border-color: rgba(79,142,247,.4); transform: translateY(-1px); }
+    .key:active { transform: scale(.95); }
+    .key.key-0 { grid-column: 2; }
+    .key.key-del {
+      background: rgba(239,68,68,.1);
+      color: var(--red);
+      border-color: rgba(239,68,68,.2);
+      font-size: .85rem;
+    }
+    .key.key-del:hover { background: rgba(239,68,68,.2); }
+    .key.key-enter {
+      background: var(--blue);
+      color: white;
+      border: none;
+      font-size: .85rem;
+    }
+    .key.key-enter:hover { background: #3b80f5; }
+
+    /* ── Footer ── */
+    .terminal-footer {
+      padding: 12px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .live-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: .75rem;
+      color: var(--text3);
+      font-weight: 600;
+    }
+    .live-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: blink 2s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+    .terminal-time {
+      font-size: .75rem;
+      color: var(--text3);
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Titlebar -->
+<div class="titlebar">
+  <span class="titlebar-title">⌁ Terminal de Acceso de Clientes</span>
+  <div class="tb-controls">
+    <button class="tb-btn tb-fs" id="tbFs" title="Pantalla completa / Restaurar">⛶</button>
+    <button class="tb-btn tb-min" id="tbMin" title="Minimizar">─</button>
+    <button class="tb-btn tb-close" id="tbClose" title="Ocultar">✕</button>
+  </div>
+</div>
+
+<!-- Body -->
+<div class="terminal-body">
+  <div class="terminal-card">
+
+    <!-- Gym header -->
+    <div class="gym-header">
+      <div class="gym-logo" id="gymLogo">N</div>
+      <div class="gym-name" id="gymName">NOVAFIT</div>
+      <div class="gym-subtitle">Control de Acceso</div>
+    </div>
+
+    <!-- Status display -->
+    <div class="status-display idle" id="statusDisplay">
+      <div class="status-icon" id="statusIcon">⌁</div>
+      <div class="status-name" id="statusName">Bienvenido</div>
+      <div class="status-detail" id="statusDetail">Ingresa tu clave de 4 dígitos o pasa tu huella</div>
+    </div>
+
+    <!-- Input area -->
+    <div class="input-area">
+      <span class="input-label">Clave PIN / Huella</span>
+      <div class="pin-row">
+        <input
+          type="text"
+          class="pin-input"
+          id="pinInput"
+          placeholder="• • • •"
+          maxlength="12"
+          autocomplete="off"
+          inputmode="numeric"
+          autofocus
+        >
+        <button class="btn-validate" id="validateBtn">Validar →</button>
+      </div>
+    </div>
+
+    <!-- Numeric keypad -->
+    <div class="keypad">
+      <button class="key" data-key="1">1</button>
+      <button class="key" data-key="2">2</button>
+      <button class="key" data-key="3">3</button>
+      <button class="key" data-key="4">4</button>
+      <button class="key" data-key="5">5</button>
+      <button class="key" data-key="6">6</button>
+      <button class="key" data-key="7">7</button>
+      <button class="key" data-key="8">8</button>
+      <button class="key" data-key="9">9</button>
+      <button class="key key-del" data-key="del">⌫ Borrar</button>
+      <button class="key key-0" data-key="0">0</button>
+      <button class="key key-enter" data-key="enter">Validar ✓</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="terminal-footer">
+  <div class="live-indicator">
+    <span class="live-dot"></span>
+    SISTEMA EN LÍNEA
+  </div>
+  <div class="terminal-time" id="terminalTime"></div>
+</div>
+
+<script src="access-terminal.js"></script>
+</body>
+</html>
