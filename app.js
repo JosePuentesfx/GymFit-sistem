@@ -418,7 +418,12 @@ if (goPayments) goPayments.onclick = () => show('payments');
 
 // Logout
 const logoutBtn = $('#logout');
-if (logoutBtn) logoutBtn.onclick = () => location.reload();
+if (logoutBtn) {
+  logoutBtn.onclick = async () => {
+    try { if (window.gymApi?.logout) await window.gymApi.logout(); } catch {}
+    location.reload();
+  };
+}
 
 // ─── Refresh ──────────────────────────────────────────────────────────────────
 async function refresh() {
@@ -1039,6 +1044,10 @@ function showReceipt(paymentId) {
   openModal('receiptModal');
 }
 
+document.addEventListener('click', e => {
+  if (e.target.closest('.js-print-receipt')) window.print();
+});
+
 // ─── ACCESS ───────────────────────────────────────────────────────────────────
 function renderAccess() {
   const log = (db.accessLog || []).slice(0, 60);
@@ -1242,11 +1251,12 @@ function renderPlansList() {
   const plans = db.plans || [];
   const el = $('#plansList');
   if (!el) return;
+  const n = (v, max) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
   el.innerHTML = plans.map((p, i) => `
     <div class="plan-item" data-idx="${i}">
       <input class="plan-name"  value="${esc(p.name)}"  placeholder="Nombre del plan"  style="font-weight:600">
-      <input class="plan-price" value="${p.price}" type="number" min="0" step="0.01" placeholder="Precio" style="width:110px">
-      <input class="plan-days"  value="${p.days}"  type="number" min="1" placeholder="Días"  style="width:80px">
+      <input class="plan-price" value="${esc(n(p.price, 0))}" type="number" min="0" step="0.01" placeholder="Precio" style="width:110px">
+      <input class="plan-days"  value="${esc(n(p.days, 30))}"  type="number" min="1" placeholder="Días"  style="width:80px">
       <button class="plan-remove" data-remove="${i}" title="Eliminar plan">✕</button>
     </div>`).join('');
 }

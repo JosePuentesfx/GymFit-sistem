@@ -45,6 +45,48 @@ let dbPath;
 let mainWin  = null;
 let termWin  = null;
 
+// ─── Session management ────────────────────────────────────────────────────────
+// Track authenticated sessions by webContents id so IPC handlers can enforce
+// authorization (role checks) server-side instead of trusting the renderer.
+const sessions = new Map(); // id -> { user, lastActivity }
+
+function getSession(event) {
+  const s = sessions.get(event.sender.id);
+  return s && s.user.active ? s : null;
+}
+function requireSession(event) {
+  const s = getSession(event);
+  if (!s) throw new Error('No autenticado. Inicia sesión de nuevo.');
+  return s;
+}
+function requireRole(event, role) {
+  const s = requireSession(event);
+  if (s.user.role !== role) throw new Error('No autorizado: se requiere rol de dueño.');
+  return s;
+}
+
+// ─── Rate limiting ─────────────────────────────────────────────────────────────
+const failedLogins  = new Map(); // fingerprint -> { count, until }
+const failedAccess  = new Map(); // key -> { count, until }
+const MAX_LOGIN_ATTEMPTS = 5;
+const MAX_ACCESS_ATTEMPTS = 8;
+const LOCK_WINDOW_MS = 15 * 60 * 1000;
+
+function isLocked(fingerprint, map) {
+  const e = map.get(fingerprint);
+  if (!e) return false;
+  if (Date.now() > e.until) { map.delete(fingerprint); return false; }
+  return true;
+}
+function recordFailure(fingerprint, map, max) {
+  const e = map.get(fingerprint) || { count: 0, until: 0 };
+  e.count += 1;
+  if (e.count >= max) e.until = Date.now() + LOCK_WINDOW_MS;
+  map.set(fingerprint, e);
+  return e;
+}
+function resetFailures(fingerprint, map) { map.delete(fingerprint); }
+
 function readDb() {
   try {
     return JSON.parse(fs.readFileSync(dbPath, 'utf8'));
@@ -147,29 +189,51 @@ ipcMain.handle('terminal:isVisible', () => {
 });
 
 // ─── DB ──────────────────────────────────────────────────────────────────────
-ipcMain.handle('db:get', () => {
+ipcMain.handle('db:get', (event) => {
+  requireSession(event);
   const data = readDb();
   return { ...data, users: data.users.map(({ password, passwordHash, ...u }) => u) };
 });
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
-ipcMain.handle('auth:login', (_, creds) => {
+// Public, limited data for the unauthenticated access terminal (kiosk).
+ipcMain.handle('gym:getPublic', () => {
   const db = readDb();
-  const user = db.users.find(u => u.username === creds.username && u.active);
-  if (!user) return null;
-  const valid = user.passwordHash
-    ? matchesPassword(creds.password, user.passwordHash)
-    : (user.password === creds.password);
-  if (valid && user.password) {
-    user.passwordHash = hashPassword(user.password);
-    delete user.password;
-    saveDb(db);
-  }
-  return valid ? (({ password, passwordHash, ...safe }) => safe)(user) : null;
+  return { gym: db.gym ? { name: db.gym.name, logo: db.gym.logo } : {} };
 });
 
-// ─── Users / Staff ────────────────────────────────────────────────────────────
-ipcMain.handle('user:add', (_, payload) => {
+// Clean up session when its window is closed.
+app.on('web-contents-created', (_e, wc) => {
+  wc.on('destroyed', () => sessions.delete(wc.id));
+});
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+ipcMain.handle('auth:login', (event, creds) => {
+  const fingerprint = String((creds && creds.username) || '');
+  if (isLocked(fingerprint, failedLogins))
+    throw new Error('Demasiados intentos fallidos. Cuenta bloqueada 15 minutos.');
+
+  const db = readDb();
+  const user = db.users.find(u => u.username === creds.username && u.active);
+  // Eliminado el backdoor legacy de texto plano: solo se acepta passwordHash scrypt.
+  const valid = !!user && !!user.passwordHash && matchesPassword(creds.password, user.passwordHash);
+  if (valid) {
+    resetFailures(fingerprint, failedLogins);
+    sessions.set(event.sender.id, { user, lastActivity: Date.now() });
+    return (({ password, passwordHash, ...safe }) => safe)(user);
+  }
+  recordFailure(fingerprint, failedLogins, MAX_LOGIN_ATTEMPTS);
+  return null;
+});
+
+// ─── Session / authorization guards used by data handlers ─────────────────────
+ipcMain.handle('session:logout', (event) => {
+  sessions.delete(event.sender.id);
+  return true;
+});
+
+// ─── Users / Staff (owner only) ────────────────────────────────────────────────
+ipcMain.handle('user:add', (event, payload) => {
+  requireRole(event, 'owner');
   const db = readDb();
   if (db.users.some(u => u.username === payload.username))
     throw new Error('Ese nombre de usuario ya existe.');
@@ -183,16 +247,21 @@ ipcMain.handle('user:add', (_, payload) => {
   return saveDb(db);
 });
 
-ipcMain.handle('user:toggle', (_, userId) => {
+ipcMain.handle('user:toggle', (event, userId) => {
+  requireRole(event, 'owner');
   const db = readDb();
   const user = db.users.find(u => u.id === userId);
   if (!user) throw new Error('Usuario no encontrado.');
   if (user.role === 'owner') throw new Error('No se puede desactivar al dueño.');
   user.active = !user.active;
+  if (!user.active) { for (const [wcId, s] of sessions) if (s.user.id === user.id) sessions.delete(wcId); }
   return saveDb(db);
 });
 
-ipcMain.handle('user:resetPassword', (_, { userId, newPassword }) => {
+ipcMain.handle('user:resetPassword', (event, { userId, newPassword }) => {
+  requireRole(event, 'owner');
+  if (typeof newPassword !== 'string' || newPassword.length < 6)
+    throw new Error('La contraseña debe tener al menos 6 caracteres.');
   const db = readDb();
   const user = db.users.find(u => u.id === userId);
   if (!user) throw new Error('Usuario no encontrado.');
@@ -200,7 +269,11 @@ ipcMain.handle('user:resetPassword', (_, { userId, newPassword }) => {
   return saveDb(db);
 });
 
-ipcMain.handle('user:changePassword', (_, { userId, currentPassword, newPassword }) => {
+ipcMain.handle('user:changePassword', (event, { userId, currentPassword, newPassword }) => {
+  if (typeof newPassword !== 'string' || newPassword.length < 6)
+    throw new Error('La contraseña debe tener al menos 6 caracteres.');
+  const s = requireSession(event);
+  if (s.user.id !== userId) throw new Error('Solo puedes cambiar tu propia contraseña.');
   const db = readDb();
   const user = db.users.find(u => u.id === userId);
   if (!user) throw new Error('Usuario no encontrado.');
@@ -210,8 +283,13 @@ ipcMain.handle('user:changePassword', (_, { userId, currentPassword, newPassword
   return saveDb(db);
 });
 
-// ─── Members ──────────────────────────────────────────────────────────────────
-ipcMain.handle('member:add', (_, payload) => {
+// ─── Member data handlers (require authenticated session) ─────────────────────
+const str = (v, max = 500) => (v === undefined || v === null ? '' : String(v).slice(0, max));
+
+ipcMain.handle('member:add', (event, payload) => {
+  requireSession(event);
+  if (!payload || !String(payload.name || '').trim())
+    throw new Error('El nombre del socio es obligatorio.');
   const db = readDb();
   if (payload.biometricId && db.members.some(m => m.biometricId === payload.biometricId && m.active))
     throw new Error('Ese ID / PIN ya está registrado en otro socio.');
@@ -219,29 +297,35 @@ ipcMain.handle('member:add', (_, payload) => {
     id: uid('member'),
     createdAt: new Date().toISOString(),
     active: true,
-    biometricId:      payload.biometricId || null,
-    name:             payload.name,
-    phone:            payload.phone,
-    email:            payload.email || '',
-    address:          payload.address || '',
-    birthdate:        payload.birthdate || '',
-    emergencyContact: payload.emergencyContact || '',
-    notes:            payload.notes || ''
+    biometricId:      str(payload.biometricId, 20) || null,
+    name:             str(payload.name, 120),
+    phone:            str(payload.phone, 40),
+    email:            str(payload.email, 120),
+    address:          str(payload.address, 250),
+    birthdate:        str(payload.birthdate, 10),
+    emergencyContact: str(payload.emergencyContact, 120),
+    notes:            str(payload.notes, 1000)
   });
   return saveDb(db);
 });
 
-ipcMain.handle('member:update', (_, { id, ...payload }) => {
+ipcMain.handle('member:update', (event, { id, ...payload }) => {
+  requireSession(event);
+  if (payload.name !== undefined && !String(payload.name || '').trim())
+    throw new Error('El nombre del socio es obligatorio.');
   const db = readDb();
   const idx = db.members.findIndex(m => m.id === id);
   if (idx === -1) throw new Error('Socio no encontrado.');
   if (payload.biometricId && db.members.some(m => m.biometricId === payload.biometricId && m.id !== id && m.active))
     throw new Error('Ese ID / PIN ya está registrado en otro socio.');
-  db.members[idx] = { ...db.members[idx], ...payload, updatedAt: new Date().toISOString() };
+  const clean = {};
+  for (const [k, v] of Object.entries(payload)) clean[k] = str(v, 1000);
+  db.members[idx] = { ...db.members[idx], ...clean, updatedAt: new Date().toISOString() };
   return saveDb(db);
 });
 
-ipcMain.handle('member:delete', (_, memberId) => {
+ipcMain.handle('member:delete', (event, memberId) => {
+  requireRole(event, 'owner');
   const db = readDb();
   const idx = db.members.findIndex(m => m.id === memberId);
   if (idx === -1) throw new Error('Socio no encontrado.');
@@ -251,23 +335,28 @@ ipcMain.handle('member:delete', (_, memberId) => {
 });
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
-ipcMain.handle('payment:add', (_, payload) => {
+ipcMain.handle('payment:add', (event, payload) => {
+  requireSession(event);
+  const amount = Number(payload.amount);
+  if (!Number.isFinite(amount) || amount <= 0)
+    throw new Error('El monto del pago debe ser un número mayor a 0.');
   const db = readDb();
   db.payments.unshift({
     id: uid('payment'),
     createdAt:   new Date().toISOString(),
-    memberId:    payload.memberId,
-    plan:        payload.plan,
-    amount:      Number(payload.amount),
-    paymentDate: payload.paymentDate,
-    dueDate:     payload.dueDate,
-    method:      payload.method || 'Efectivo',
-    notes:       payload.notes || ''
+    memberId:    str(payload.memberId, 64),
+    plan:        str(payload.plan, 120),
+    amount,
+    paymentDate: str(payload.paymentDate, 10),
+    dueDate:     str(payload.dueDate, 10),
+    method:      str(payload.method, 40) || 'Efectivo',
+    notes:       str(payload.notes, 1000)
   });
   return saveDb(db);
 });
 
-ipcMain.handle('payment:delete', (_, paymentId) => {
+ipcMain.handle('payment:delete', (event, paymentId) => {
+  requireSession(event);
   const db = readDb();
   const idx = db.payments.findIndex(p => p.id === paymentId);
   if (idx === -1) throw new Error('Pago no encontrado.');
@@ -277,8 +366,13 @@ ipcMain.handle('payment:delete', (_, paymentId) => {
 
 // ─── Access ───────────────────────────────────────────────────────────────────
 ipcMain.handle('access:verify', (_, biometricId) => {
+  const key = String(biometricId || '').trim();
+  if (isLocked(key, failedAccess))
+    throw new Error('Demasiados intentos. Intenta de nuevo en 15 minutos.');
+
   const db = readDb();
-  const member = db.members.find(m => m.biometricId === biometricId && m.active);
+  const member = db.members.find(m => m.biometricId === key && m.active);
+  if (!member) { recordFailure(key, failedAccess, MAX_ACCESS_ATTEMPTS); }
   const today  = new Date().toISOString().slice(0, 10);
   const lastPay = member
     ? db.payments
@@ -289,7 +383,7 @@ ipcMain.handle('access:verify', (_, biometricId) => {
   const event = {
     id:          uid('access'),
     timestamp:   new Date().toISOString(),
-    biometricId,
+    biometricId: key,
     memberId:    member?.id  || null,
     allowed:     !!paid,
     reason:      !member ? 'ID no registrado' : paid ? 'Membresía vigente' : 'Membresía vencida'
@@ -299,28 +393,40 @@ ipcMain.handle('access:verify', (_, biometricId) => {
   return { ...event, member: member ? { id: member.id, name: member.name } : null };
 });
 
-ipcMain.handle('access:clearLog', () => {
+ipcMain.handle('access:clearLog', (event) => {
+  requireRole(event, 'owner');
   const db = readDb();
   db.accessLog = [];
   return saveDb(db);
 });
 
 // ─── Plans ────────────────────────────────────────────────────────────────────
-ipcMain.handle('plans:update', (_, plans) => {
+ipcMain.handle('plans:update', (event, plans) => {
+  requireRole(event, 'owner');
+  if (!Array.isArray(plans)) throw new Error('Formato de planes inválido.');
   const db = readDb();
-  db.plans = plans;
+  db.plans = plans.map(p => ({
+    id:    str(p.id, 64) || `plan-${Date.now()}`,
+    name:  str(p.name, 80),
+    price: Math.max(0, Number(p.price) || 0),
+    days:  Math.max(1, Math.min(3650, Math.floor(Number(p.days) || 30)))
+  })).filter(p => p.name);
   return saveDb(db);
 });
 
 // ─── Gym config ───────────────────────────────────────────────────────────────
-ipcMain.handle('gym:update', (_, config) => {
+ipcMain.handle('gym:update', (event, config) => {
+  requireRole(event, 'owner');
   const db = readDb();
-  db.gym = { ...db.gym, ...config };
+  const clean = {};
+  for (const [k, v] of Object.entries(config || {})) clean[k] = str(v, 250);
+  db.gym = { ...db.gym, ...clean };
   return saveDb(db);
 });
 
 // ─── Data export ──────────────────────────────────────────────────────────────
 ipcMain.handle('data:exportCsv', async (event, { type }) => {
+  requireSession(event);
   const db = readDb();
   let csv = '';
   const safe = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -360,7 +466,8 @@ ipcMain.handle('data:exportCsv', async (event, { type }) => {
   return { success: false };
 });
 
-ipcMain.handle('data:backup', async () => {
+ipcMain.handle('data:backup', async (event) => {
+  requireRole(event, 'owner');
   const db = readDb();
   const { filePath, canceled } = await dialog.showSaveDialog({
     title: 'Guardar backup',
@@ -374,7 +481,77 @@ ipcMain.handle('data:backup', async () => {
   return { success: false };
 });
 
-ipcMain.handle('data:restore', async () => {
+// ─── Granular validation for restored backups ─────────────────────────────────
+function sanitizeRestored(data) {
+  if (!data || typeof data !== 'object') throw new Error('Archivo inválido');
+  if (!Array.isArray(data.users) || !Array.isArray(data.members) || !Array.isArray(data.payments))
+    throw new Error('Estructura del backup inválida');
+
+  const clean = {
+    gym: { name: 'NovaFit', owner: 'Admin', address: '', phone: '', email: '',
+           currency: 'MXN', timezone: 'America/Mexico_City', logo: null, ...(data.gym || {}) },
+    plans: Array.isArray(data.plans) ? data.plans : initialData.plans,
+    users: [],
+    members: [],
+    payments: [],
+    accessLog: Array.isArray(data.accessLog) ? data.accessLog : []
+  };
+
+  // Users: force valid, non-empty password hashes; neutralize role escalation.
+  const seenUsernames = new Set();
+  for (const u of data.users) {
+    if (!u || typeof u.username !== 'string' || !u.username.trim()) continue;
+    if (seenUsernames.has(u.username)) continue;
+    seenUsernames.add(u.username);
+    const isOwner = u.role === 'owner';
+    if (isOwner && clean.users.some(x => x.role === 'owner')) continue; // keep existing owner
+    clean.users.push({
+      id: u.id || uid('user'),
+      name: str(u.name, 120) || u.username,
+      username: u.username.trim(),
+      role: isOwner ? 'owner' : 'receptionist',
+      active: !!u.active,
+      createdAt: typeof u.createdAt === 'string' ? u.createdAt : new Date().toISOString(),
+      passwordHash: typeof u.passwordHash === 'string' && u.passwordHash.includes(':')
+        ? u.passwordHash
+        : hashPassword(u.username + 'novafit')
+    });
+  }
+  // Ensure at least one owner always exists.
+  if (!clean.users.some(u => u.role === 'owner')) {
+    const owner = initialData.users[0];
+    clean.users.unshift({ ...owner, passwordHash: hashPassword('admin123') });
+  }
+
+  for (const m of data.members) {
+    if (!m || !m.name) continue;
+    clean.members.push({
+      id: m.id || uid('member'),
+      createdAt: typeof m.createdAt === 'string' ? m.createdAt : new Date().toISOString(),
+      active: m.active !== false,
+      biometricId: str(m.biometricId, 20) || null,
+      name: str(m.name, 120), phone: str(m.phone, 40), email: str(m.email, 120),
+      address: str(m.address, 250), birthdate: str(m.birthdate, 10),
+      emergencyContact: str(m.emergencyContact, 120), notes: str(m.notes, 1000)
+    });
+  }
+
+  for (const p of data.payments) {
+    if (!p || !p.memberId) continue;
+    clean.payments.push({
+      id: p.id || uid('payment'),
+      createdAt: typeof p.createdAt === 'string' ? p.createdAt : new Date().toISOString(),
+      memberId: str(p.memberId, 64), plan: str(p.plan, 120),
+      amount: Math.max(0, Number(p.amount) || 0),
+      paymentDate: str(p.paymentDate, 10), dueDate: str(p.dueDate, 10),
+      method: str(p.method, 40) || 'Efectivo', notes: str(p.notes, 1000)
+    });
+  }
+  return clean;
+}
+
+ipcMain.handle('data:restore', async (event) => {
+  requireRole(event, 'owner');
   const { filePaths, canceled } = await dialog.showOpenDialog({
     title: 'Restaurar backup',
     filters: [{ name: 'JSON', extensions: ['json'] }],
@@ -383,8 +560,7 @@ ipcMain.handle('data:restore', async () => {
   if (!canceled && filePaths[0]) {
     try {
       const data = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
-      if (!data.members || !data.payments || !data.users) throw new Error('Archivo inválido');
-      saveDb(data);
+      saveDb(sanitizeRestored(data));
       return { success: true };
     } catch {
       throw new Error('El archivo de backup no es válido.');
@@ -393,7 +569,8 @@ ipcMain.handle('data:restore', async () => {
   return { success: false };
 });
 
-ipcMain.handle('data:stats', () => {
+ipcMain.handle('data:stats', (event) => {
+  requireSession(event);
   const db   = readDb();
   const now  = new Date();
   const today = now.toISOString().slice(0, 10);

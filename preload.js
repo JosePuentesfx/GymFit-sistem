@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('gymApi', {
 
   // Auth
   login:          data => ipcRenderer.invoke('auth:login', data),
+  logout:         ()   => ipcRenderer.invoke('session:logout'),
   changePassword: data => ipcRenderer.invoke('user:changePassword', data),
 
   // Users / Staff

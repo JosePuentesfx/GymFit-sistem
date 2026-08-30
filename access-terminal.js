@@ -38,8 +38,9 @@ function focusPinInput() {
 // ─── Load gym data ────────────────────────────────────────────────────────────
 async function loadData() {
   try {
-    gymData = await window.accessApi.getData();
-    const name = gymData?.gym?.name || 'NOVAFIT';
+    const pub = await window.accessApi.getPublic();
+    gymData = pub;
+    const name = pub?.gym?.name || 'NOVAFIT';
     $('#gymName').textContent  = name.toUpperCase();
     $('#gymLogo').textContent  = name.charAt(0).toUpperCase();
 

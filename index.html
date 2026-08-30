@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NovaFit Pro — Sistema de Gimnasio</title>
   <meta name="description" content="Sistema profesional de administración de gimnasio con control de socios, pagos, acceso biométrico y reportes.">
@@ -677,7 +678,7 @@
     <div id="receiptContent"></div>
     <div class="modal-footer">
       <button type="button" class="btn-ghost modal-close-btn">Cerrar</button>
-      <button type="button" class="btn-primary" onclick="window.print()">🖨 Imprimir recibo</button>
+      <button type="button" class="btn-primary js-print-receipt">🖨 Imprimir recibo</button>
     </div>
   </div>
 </div>

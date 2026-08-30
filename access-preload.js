@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('accessApi', {
   // Access validation
   verifyAccess: biometricId => ipcRenderer.invoke('access:verify', biometricId),
-  getData:      ()          => ipcRenderer.invoke('db:get'),
+  getPublic:    ()          => ipcRenderer.invoke('gym:getPublic'),
 
   // Window controls for terminal
   minimize:         () => ipcRenderer.send('terminal:minimize'),
